@@ -16,15 +16,28 @@ import minimalmodbus
 SERIAL_PORT = '/dev/ttyUSB0' # set the right serial port
 SERIAL_BAUDRATE = 19200 # Set Modbus Baudrate
 ID_NODE = 11 # Set DL485D4 ID 
+DEBUG = False
+
+"""
+Classe per comandare in modo agevole il DIMMER DL485D4 tramite MODBUS
+Informazioni tecniche dettagliate su https://wiki.elettro.info/doku.php?id=smart_dimmer_led
+
+Tramite MODBUS si può comandare DL485D4 in tutte le sue funzioni: attivare i 4 canali di uscita passando per le rampe o con accensione/spegnimento immadiato, 
+leggere gli ingressi, leggere il valore di tensione di alimentazione, la temperatura del Microcontrollore e la temperatura di sensori esterni DS18B20 collegati ai vari ingressi.
+È possibile memorizzare il valore delle intenstà e dei vari parametri disponibili.
+
+La classe presenta dell funzioni utili per il comando / lettura / memorizzazione.
+"""
 
 
 class DL485D4:
     """ Class to control DL485D4 Dimmer by Modbus """
-    def __init__(self, id_node=ID_NODE, baudrate=SERIAL_BAUDRATE, port=SERIAL_PORT):
+    def __init__(self, id_node=ID_NODE, baudrate=SERIAL_BAUDRATE, port=SERIAL_PORT, debug=DEBUG):
         """ Inizializzazione """
         self.id_node = id_node
         self.baudrate = baudrate
         self.port = port
+        self.debug = debug
         self.instrument = minimalmodbus.Instrument(self.port, self.id_node, debug=False)  # port name, slave address (in decimal)
         self.instrument.serial.baudrate = self.baudrate
         self.instrument.serial.parity = minimalmodbus.serial.PARITY_NONE
@@ -46,7 +59,7 @@ class DL485D4:
         return backup_data
 
     def get_temp_micro(self, data):
-        """ Ritoran la temperatura converita """
+        """ Ritorna la temperatura converita """
         return int(data) - 270 + 25
 
     def get_temp_ds18b20(self, data):
@@ -68,43 +81,69 @@ class DL485D4:
     def io(self, name):
         """ Dato il nome dell'IO ritorna il valore numerico da passare alla libreria modbus """
         if name.lower()=='out1': # Uscita DIMMER 1 di potenza controllo LED
-            return 11
+            val = 11
         elif name.lower()=='out2': # Uscita DIMMER 2 di potenza controllo LED
-            return 12
+            val = 12
         elif name.lower()=='out3': # Uscita DIMMER 3 di potenza controllo LED
-            return 13
+            val = 13
         elif name.lower()=='out4': # Uscita DIMMER 4 di potenza controllo LED
-            return 14
-        if name.lower()=='out1_i': # Uscita DIMMER 1 di potenza controllo LED IMMEDIATA
-            return 21
+            val = 14
+        elif name.lower()=='out1_i': # Uscita DIMMER 1 di potenza controllo LED IMMEDIATA
+            val = 21
         elif name.lower()=='out2_i': # Uscita DIMMER 2 di potenza controllo LED IMMEDIATA
-            return 22
+            val = 22
         elif name.lower()=='out3_i': # Uscita DIMMER 3 di potenza controllo LED IMMEDIATA
-            return 23
+            val = 23
         elif name.lower()=='out4_i': # Uscita DIMMER 4 di potenza controllo LED IMMEDIATA
-            return 24
+            val = 24
+        elif name.lower()=='out1_e': # Uscita DIMMER 1 con RAMPA e Memorizzazione su EE
+            val = 31
+        elif name.lower()=='out2_e': # Uscita DIMMER 2 con RAMPA e Memorizzazione su EE
+            val = 32
+        elif name.lower()=='out3_e': # Uscita DIMMER 3 con RAMPA e Memorizzazione su EE
+            val = 33
+        elif name.lower()=='out4_e': # Uscita DIMMER 4 con RAMPA e Memorizzazione su EE
+            val = 34
+        elif name.lower()=='out1_ie': # Uscita DIMMER 1 IMMEDIATA e Memorizzazione su EE
+            val = 41
+        elif name.lower()=='out2_ie': # Uscita DIMMER 2 IMMEDIATA e Memorizzazione su EE
+            val = 42
+        elif name.lower()=='out3_ie': # Uscita DIMMER 3 IMMEDIATA e Memorizzazione su EE
+            val = 43
+        elif name.lower()=='out4_ie': # Uscita DIMMER 4 IMMEDIATA e Memorizzazione su EE
+            val = 44
         elif name.lower()=='io1': # I/O 1
-            return 1
+            val = 1
         elif name.lower()=='io2': # I/O 2
-            return 2
+            val = 2
         elif name.lower()=='io3': # I/O 3
-            return 3
+            val = 3
         elif name.lower()=='io4': # I/O 4
-            return 4
+            val = 4
         elif name.lower() in ['io5', 'general', 'master']: # I/O 5
-            return 5
+            val = 5
         elif name.lower()=='io6': # I/O 6
-            return 6
+            val = 6
         elif name.lower() == 'reset':
-            return 97
-        elif name.lower() == 'vin': # Lettura alimentazione ingresso
-            return 98
+            val = 97
+        elif name.lower() == 'vin': # Lettura Tensione alimentazione
+            val = 98
         elif name.lower() == 'temp_micro': # Lettura temperatura rilevata dal MICRO
-            return 99
+            val = 99
+        elif name.lower() == 'read_out1': # Lettura Valore impostato Uscita 1
+            val = 1102
+        elif name.lower() == 'read_out2': # Lettura Valore impostato Uscita 2
+            val = 1202
+        elif name.lower() == 'read_out3': # Lettura Valore impostato Uscita 3
+            val = 1302
+        elif name.lower() == 'read_out4': # Lettura Valore impostato Uscita 4
+            val = 1402
         else:
-            print("NOTE VALID NAME")
+            print(f"NOT VALID I/O NAME: {name}")
             sys.exit()
             # return False
+        if self.debug: print(f"IO {name=} {val=}")
+        return val
 
     def read(self, io):
         """ Funzione per la lettura dei registri """
@@ -130,12 +169,12 @@ class DL485D4:
         start_ind = 1000 + (100 * ch)
         for ind in range(start_ind, start_ind + 32):
             self.write(ind, 0)
-            print(ind, self.read(ind))
+            if self.debug: print(ind, self.read(ind))
 
     def restore(self, data):
         """ Fa il restore dei parametri salvati """
         for a, d in data:
-            print(a, d)
+            if self.debug: print(a, d)
             self.write(a, d)
 
     def setup_io(self, io_type):
@@ -146,17 +185,19 @@ class DL485D4:
             io_type: fare riferimento alla pagine wiki https://wiki.elettro.info/doku.php?id=dl485_modbus
         """
         if io_type == "DIGITAL_OUT":
-            return 0b00000001
+            val = 0b00000001
         elif io_type == "DIGITAL_OUT_INVERTED":
-            return 0b10000001
+            val = 0b10000001
         elif io_type == "DIGITAL_IN":
-            return  0b00000000
+            val =  0b00000000
         elif io_type == "DIGITAL_IN_PULLUP":
-            return 0b01000000
+            val = 0b01000000
         elif io_type == "ANALOG_IN":
-            return 0b00000010
+            val = 0b00000010
         elif io_type == "DS18B20":
-            return 0b00000100
+            val = 0b00000100
+        if self.debug: val
+        return val
 
     def write(self, io, command, decimal_point=0):
         """ Comando di scrittura IO / Registri """
@@ -178,32 +219,135 @@ class DL485D4:
 
 
 if __name__ == "__main__":
-    print("Test outputs Dimmer DL485")
-    d = DL485D4()
+    print("=== Test outputs Dimmer DL485 ===")
+    d = DL485D4() # istanza della classe
 
-    d.write(101, 0x4)
-    print(d.read(101))
-    print(d.read(1))
+    # Example to command the 4 LED outputs how: 10% 30% 60% 100% 
+    
+    v = 9
 
-    d.write(102, 0x0)
-    print(d.read(102))
-    print(d.read(2))
+    d.write(d.io('out1_e'), v)
+    # # d.write(d.io('out2_e'), v)
+    # # d.write(d.io('out3_e'), v)
+    d.write(d.io('out4_e'), v)
 
-    d.write(103, 0x0)
-    print(d.read(103))
-    print(d.read(3))
+    print("=========================")
 
-    d.write(104, 0x0)
-    print(d.read(104))
-    print(d.read(4))
+    # d.write(d.io('out1_ie'), v)
+    # # time.sleep(0.5)
+    # d.write(d.io('out2_ie'), v+1)
+    # # time.sleep(0.5)
+    # d.write(d.io('out3_ie'), v+2)
+    # # time.sleep(0.5)
+    # d.write(d.io('out4_ie'), v+3)
 
-    d.write(105, 0x0)
-    print(d.read(105))
-    print(d.read(5))
+    print(d.read(d.io('read_out1')))
+    print(d.read(d.io('read_out2')))
+    print(d.read(d.io('read_out3')))
+    print(d.read(d.io('read_out4')))
+    
+    print("-------------------")
+    d.write(d.io('out1_e'), v+200)
+    # d.write(d.io('out2_e'), v+200)
+    # d.write(d.io('out3_e'), v+200)
+    d.write(d.io('out4_e'), v+200)
+    time.sleep(0.5)
+    print(d.read(d.io('read_out1')))
+    print(d.read(d.io('read_out2')))
+    print(d.read(d.io('read_out3')))
+    print(d.read(d.io('read_out4')))
 
-    d.write(106, 0x0)
-    print(d.read(106))
-    print(d.read(6))
+
+    # time.sleep(0.5)
+    # d.write(d.io('out1_e'), v+200)
+    # time.sleep(0.5)
+    # d.write(d.io('out2_e'), v+200)
+    # time.sleep(0.5)
+    # d.write(d.io('out3_e'), v+200)
+    # time.sleep(0.5)
+    # d.write(d.io('out4_e'), v+200)
+
+    # print(d.read(1102))
+    # time.sleep(0.2)
+    # print(d.read(1202))
+    # time.sleep(0.2)
+    # print(d.read(1302))
+    # time.sleep(0.2)
+    # print(d.read(1402))
+
+    # print(d.read(1102))
+    # time.sleep(0.2)
+    # print(d.read(1202))
+    # time.sleep(0.2)
+    # print(d.read(1302))
+    # time.sleep(0.2)
+    # print(d.read(1402))
+    
+    # d.write(d.io('out1_e'), v+200)
+    # # d.write(d.io('out2_e'), v+200)
+    # d.write(d.io('out3_e'), v+200)
+    # d.write(d.io('out4_e'), v+200)
+    
+
+
+    # Example to READ Voltage Power Supply 
+    # vadc = d.read(d.io('vin'))
+    # v = d.get_vin(vadc) # Convert from ADC to Real Voltage
+    # print(f"Voltage Power Supply: {v/10:>2.1f}")
+    # END Read Power Supply Voltage
+
+    # Example to READ Micro Temperature 
+    # tadc = d.read(d.io('temp_micro')) # In decimi di grado centigrado
+    # t = d.get_temp_micro(tadc) # Convert Temp from ADC to Degree
+    # print(f"Temperature Micro ATMEGA328PB: {t:>2.1f}")
+    # END Read Power Supply Voltage
+
+    # Read I/O 1, 2, 3, 4, 5, 6 status
+    # print(d.read(d.io('io1')))
+    # print(d.read(d.io('io2')))
+    # print(d.read(d.io('io3')))
+    # print(d.read(d.io('io4')))
+    # print(d.read(d.io('io5')))
+    # print(d.read(d.io('io6')))
+    # END READ IO Status
+
+    # d.write(101, d.setup_io('DIGITAL_IN'))
+    # d.write(102, d.setup_io('DIGITAL_IN'))
+    # d.write(103, d.setup_io('DIGITAL_IN'))
+    # d.write(104, d.setup_io('DIGITAL_IN'))
+    # d.write(105, d.setup_io('DIGITAL_IN'))
+    # d.write(106, d.setup_io('DIGITAL_IN'))
+
+    # print(hex(d.read(101)))
+    # print(hex(d.read(102)))
+    # print(hex(d.read(103)))
+    # print(hex(d.read(104)))
+    # print(hex(d.read(105)))
+    # print(hex(d.read(106)))
+    
+    # d.write(101, 0x4)
+    # print(d.read(101))
+    # print(d.read(1))
+
+    # d.write(102, 0x0)
+    # print(d.read(102))
+    # print(d.read(2))
+
+    # d.write(103, 0x0)
+    # print(d.read(103))
+    # print(d.read(3))
+
+    # d.write(104, 0x0)
+    # print(d.read(104))
+    # print(d.read(4))
+
+    # d.write(105, 0x0)
+    # print(d.read(105))
+    # print(d.read(5))
+
+    # d.write(106, 0x0)
+    # print(d.read(106))
+    # print(d.read(6))
 
     # d.write(101, 0x40)
     # print(d.read(101))
